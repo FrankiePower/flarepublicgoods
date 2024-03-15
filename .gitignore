@@ -4,4 +4,5 @@ broadcast
 dist
 
 packages/foundry/out
-.envexamples/developer-hub/
+.env
+examples/developer-hub/

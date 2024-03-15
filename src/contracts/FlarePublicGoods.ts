@@ -14,7 +14,7 @@ export const CONTRACTS = {
     flarePublicGoods: '0xC6194e7Bb438875340F4d09302f1f03E22318Be0', // Multi-protocol FlarePublicGoods
     usdc: '0xCe987892D5AD2990b8279e8F76530CfF72977666',
     wflr: '0xCa839F8a3aFe95D4B8F8D5E0AE96Eab7cB90Dabb', // WFLR on Coston2
-    fxrp: '0x8b4abA9C4BD7DD961659b02129beE20c6286e17F' // FXRP on Coston2
+    fxrp: '0xd54a91d7F0f58faF60dcf0dD55D281540548DDAF' // Mock FXRP on Coston2 (with faucet)
   },
   545: { // Flow EVM Testnet
     flarePublicGoods: '0x7d12dc1ec75675dafcf0e0651a6bc14a94d6e338',
@@ -134,4 +134,28 @@ export const flarePublicGoodsAbi = [
   { inputs: [{ internalType: 'string', name: '_githubRepo', type: 'string' }], name: 'registerDeveloper', outputs: [], stateMutability: 'nonpayable', type: 'function' },
   { inputs: [], name: 'allocateFunds', outputs: [], stateMutability: 'nonpayable', type: 'function' },
   { inputs: [{ internalType: 'address', name: '_dev', type: 'address' }, { internalType: 'uint256', name: '_stars', type: 'uint256' }], name: 'verifyDeveloper', outputs: [], stateMutability: 'nonpayable', type: 'function' }
+] as const;
+
+// Mock FXRP ABI for faucet functionality
+export const mockFxrpAbi = [
+  // ERC-20 Standard Functions
+  { inputs: [], name: 'name', outputs: [{ internalType: 'string', name: '', type: 'string' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'symbol', outputs: [{ internalType: 'string', name: '', type: 'string' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'decimals', outputs: [{ internalType: 'uint8', name: '', type: 'uint8' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'totalSupply', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ internalType: 'address', name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ internalType: 'address', name: 'to', type: 'address' }, { internalType: 'uint256', name: 'amount', type: 'uint256' }], name: 'transfer', outputs: [{ internalType: 'bool', name: '', type: 'bool' }], stateMutability: 'nonpayable', type: 'function' },
+  { inputs: [{ internalType: 'address', name: 'spender', type: 'address' }, { internalType: 'uint256', name: 'amount', type: 'uint256' }], name: 'approve', outputs: [{ internalType: 'bool', name: '', type: 'bool' }], stateMutability: 'nonpayable', type: 'function' },
+  { inputs: [{ internalType: 'address', name: 'owner', type: 'address' }, { internalType: 'address', name: 'spender', type: 'address' }], name: 'allowance', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+
+  // Faucet Functions
+  { inputs: [], name: 'FAUCET_AMOUNT', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'COOLDOWN_TIME', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ internalType: 'address', name: '', type: 'address' }], name: 'lastClaimTime', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'faucet', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+  { inputs: [{ internalType: 'address', name: 'user', type: 'address' }], name: 'timeUntilNextClaim', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ internalType: 'address', name: 'user', type: 'address' }], name: 'canClaim', outputs: [{ internalType: 'bool', name: '', type: 'bool' }], stateMutability: 'view', type: 'function' },
+
+  // Events
+  { anonymous: false, inputs: [{ indexed: true, internalType: 'address', name: 'user', type: 'address' }, { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' }], name: 'FaucetClaim', type: 'event' }
 ] as const;

@@ -28,10 +28,11 @@ This project demonstrates integration with **ALL 5 of Flare's enshrined protocol
 
 ## 🔧 Technical Architecture
 
-### Smart Contract
+### Smart Contract Addresses (Coston2 Testnet)
+
 - **Network**: Coston2 Testnet (Chain ID: 114)
-- **Contract Address**: `0xC6194e7Bb438875340F4d09302f1f03E22318Be0`
-- **FXRP Token**: `0x8b4abA9C4BD7DD961659b02129beE20c6286e17F`
+- **FlarePublicGoods**: `0xC6194e7Bb438875340F4d09302f1f03E22318Be0`
+- **Mock FXRP (with Faucet)**: `0xd54a91d7F0f58faF60dcf0dD55D281540548DDAF`
 - **FTSO v2**: `0x3d893C53D9e8056135C26C8c638B76C8b60Df726`
 - **Random v2**: `0x5CdF9eAF3EB8b44fB696984a1420B56A7575D250`
 - **FDC Hub**: `0x0C842DFE4292A285f76F4Ac83b4156A15093A841`
@@ -61,14 +62,27 @@ function verifyDeveloper(address dev, uint256 stars) external onlyOwner
 ## 🚀 Quick Start
 
 ### Get Test Tokens
-1. Get C2FLR from [Flare Faucet](https://faucet.flare.network/)
-2. Get FXRP from the [FAssets Minting Portal](https://docs.flare.network/fassets/minting)
+
+1. **Get C2FLR** (for gas fees)
+   - Visit [Flare Faucet](https://faucet.flare.network/)
+   - Select Coston2 network
+   - Enter your wallet address
+
+2. **Get Mock FXRP** (easy testing!)
+   - Connect to the dApp on Coston2
+   - Click "Claim Free MFXRP" in the faucet card
+   - Receive 1,000 MFXRP instantly
+   - Cooldown: 1 hour between claims
+
+**Note:** We use Mock FXRP (MFXRP) for easier testing. It's a simple ERC-20 with a public faucet function, so you don't need to go through the complex FAssets minting process.
 
 ### Try the dApp
+
 1. Visit [https://your-deployment-url.vercel.app](https://your-deployment-url.vercel.app)
 2. Connect your wallet to Coston2
-3. Deposit FXRP to support public goods
-4. Your principal stays safe - withdraw anytime!
+3. Claim free MFXRP from the faucet
+4. Deposit MFXRP to support public goods
+5. Your principal stays safe - withdraw anytime!
 
 ## 📖 How Flare Protocols Power This dApp
 
@@ -148,11 +162,40 @@ cd flarepublicgoods
 npm install
 cd packages/foundry && forge install
 
-# Deploy to Coston2
-forge script script/DeployFlarePublicGoodsSimple.s.sol:DeployFlarePublicGoodsSimple \
+# 1. Deploy Mock FXRP (with faucet)
+forge script script/DeployMockFXRP.s.sol:DeployMockFXRP \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc \
+  --broadcast --legacy
+
+# 2. Deploy FlarePublicGoods contract
+forge script script/DeployFlarePublicGoods.s.sol:DeployFlarePublicGoods \
   --rpc-url https://coston2-api.flare.network/ext/C/rpc \
   --broadcast --legacy
 ```
+
+### Mock FXRP Faucet Contract
+
+The Mock FXRP contract includes a built-in faucet for easy testing:
+
+```solidity
+// MockFXRP.sol - Simple ERC-20 with faucet
+contract MockFXRP is ERC20 {
+    uint256 public constant FAUCET_AMOUNT = 1000 * 10**18; // 1000 MFXRP
+    uint256 public constant COOLDOWN_TIME = 1 hours;
+
+    function faucet() external {
+        require(canClaim(msg.sender), "Cooldown not elapsed");
+        _mint(msg.sender, FAUCET_AMOUNT);
+    }
+}
+```
+
+**Features:**
+
+- ✅ 1,000 MFXRP per claim
+- ✅ 1-hour cooldown between claims
+- ✅ View functions to check eligibility
+- ✅ Initial supply: 1M MFXRP to deployer
 
 ### Contract Functions
 

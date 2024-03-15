@@ -32,6 +32,7 @@ import {
 } from '../lib/animations';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import PriceFeedDashboard from '../components/PriceFeedDashboard';
+import FXRPFaucet from '../components/FXRPFaucet';
 
 const PSLHome = () => {
   const { isConnected, chain, address } = useAccount();
@@ -816,11 +817,115 @@ const PSLHome = () => {
           </div>
         )}
 
+        {/* Hero Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className='text-center space-y-4 py-8'
+        >
+          <h1 className='text-4xl md:text-6xl font-bold text-foreground'>
+            Fund the Future of Flare
+          </h1>
+          <p className='text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto'>
+            Support open-source developers building on Flare through transparent, automated, and fair public goods funding
+          </p>
+          <div className='flex flex-wrap justify-center gap-6 pt-4 text-sm text-muted-foreground'>
+            <div className='flex items-center gap-2'>
+              <span className='text-2xl'>🔥</span>
+              <span>Powered by FTSO v2</span>
+            </div>
+            <div className='flex items-center gap-2'>
+              <span className='text-2xl'>🎲</span>
+              <span>Secure Random Selection</span>
+            </div>
+            <div className='flex items-center gap-2'>
+              <span className='text-2xl'>📊</span>
+              <span>GitHub-Verified Projects</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* How It Works Section */}
+        <Card className='bg-card border-border'>
+          <CardContent className='p-6 md:p-8'>
+            <h2 className='text-2xl md:text-3xl font-bold text-foreground mb-6 text-center'>
+              How It Works
+            </h2>
+            <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+              {/* Step 1 */}
+              <div className='text-center space-y-3'>
+                <div className='text-4xl mb-2'>💰</div>
+                <h3 className='text-lg font-semibold text-foreground'>1. Deposit FXRP</h3>
+                <p className='text-sm text-muted-foreground'>
+                  Deposit Mock FXRP tokens to the pool. Get free test tokens from the faucet to try it out!
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div className='text-center space-y-3'>
+                <div className='text-4xl mb-2'>🎯</div>
+                <h3 className='text-lg font-semibold text-foreground'>2. Automated Distribution</h3>
+                <p className='text-sm text-muted-foreground'>
+                  Funds are allocated to verified developers using Flare's secure randomness and FTSO price feeds for fair, transparent distribution.
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div className='text-center space-y-3'>
+                <div className='text-4xl mb-2'>✨</div>
+                <h3 className='text-lg font-semibold text-foreground'>3. Track Impact</h3>
+                <p className='text-sm text-muted-foreground'>
+                  Watch your contribution support quality open-source projects. All allocations are transparent and on-chain.
+                </p>
+              </div>
+            </div>
+
+            {/* Key Benefits */}
+            <div className='mt-8 pt-6 border-t border-border'>
+              <h3 className='text-lg font-semibold text-foreground mb-4 text-center'>Why Flare Public Goods?</h3>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
+                <div className='flex items-start gap-3'>
+                  <span className='text-success text-xl'>✓</span>
+                  <div>
+                    <strong className='text-foreground'>Passive Impact Investment</strong>
+                    <p className='text-muted-foreground'>Set it and forget it - funds allocate automatically</p>
+                  </div>
+                </div>
+                <div className='flex items-start gap-3'>
+                  <span className='text-success text-xl'>✓</span>
+                  <div>
+                    <strong className='text-foreground'>Provably Fair</strong>
+                    <p className='text-muted-foreground'>Flare's on-chain randomness ensures unbiased selection</p>
+                  </div>
+                </div>
+                <div className='flex items-start gap-3'>
+                  <span className='text-success text-xl'>✓</span>
+                  <div>
+                    <strong className='text-foreground'>Price-Weighted Allocation</strong>
+                    <p className='text-muted-foreground'>Higher FLR prices = more funding to developers</p>
+                  </div>
+                </div>
+                <div className='flex items-start gap-3'>
+                  <span className='text-success text-xl'>✓</span>
+                  <div>
+                    <strong className='text-foreground'>GitHub Integration</strong>
+                    <p className='text-muted-foreground'>Only verified, quality projects receive funding</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Price Feeds */}
         <PriceFeedDashboard
           contractAddress={contractAddress as `0x${string}`}
           contractAbi={flarePublicGoodsAbi}
         />
+
+        {/* Faucet */}
+        <FXRPFaucet />
 
         {/* Stats Grid */}
         <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
