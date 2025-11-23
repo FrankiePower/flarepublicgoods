@@ -8,7 +8,6 @@ import {RandomNumberV2Interface} from "@flarenetwork/flare-periphery-contracts/c
 /**
  * @title FlareSecureRandomAdapter
  * @notice Adapter for Flare network's secure random number generation
- * @dev Implements IRandomnessProvider interface for use in the Pumpkin Spice Latte project
  */
 contract FlareSecureRandomAdapter is IRandomnessProvider {
     RandomNumberV2Interface internal randomV2;
