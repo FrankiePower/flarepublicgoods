@@ -12,7 +12,7 @@ export const CONTRACTS = {
   },
   114: { // Flare testnet (Coston2)
     // Deployed FlarePublicGoods + underlying from Kinetic market
-    flarePublicGoods: '0xf94d594A61358761FAcDCe77E5Ff4303dad12a49',
+    flarePublicGoods: '0x78890D0059FD06DF96B24Df545bDCB12569e2D7d',
     usdc: '0xCe987892D5AD2990b8279e8F76530CfF72977666'
   },
   747474: { // Katana mainnet
