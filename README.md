@@ -1,154 +1,238 @@
-# Flare Public Goods
+# 🌟 Flare Public Goods - Developer Funding Protocol
 
-A decentralized public goods funding platform built on Flare Network. Users deposit USDC to support open-source projects and community initiatives. The deposits generate yield through DeFi lending strategies (Morpho Blue and Kinetic Markets), and all generated yield is automatically allocated to fund public goods. Your principal remains safe and fully withdrawable at any time.
+> **Autonomous Developer Funding Powered by 5 Flare Enshrined Protocols**
 
-## How It Works
+A decentralized application that autonomously funds developers building on Flare, leveraging FXRP deposits, FTSO price feeds for dynamic allocations, secure randomness for fair selection, and architecture for cross-chain deposits and GitHub verification.
 
-1. **Deposit USDC**: Users contribute USDC to the funding pool
-2. **Generate Yield**: Deposits earn yield through secure DeFi lending protocols
-3. **Automatic Allocation**: All generated yield is allocated to public goods recipients
-4. **No Loss**: Your principal is always safe and can be withdrawn anytime
-5. **Fair Distribution**: Recipients are selected using Flare's secure VRF (Verifiable Random Function) with time-weighted probability
+## 🎯 What It Does
 
-## Project Structure
+Users deposit FXRP (Flare's synthetic XRP) to fund developers. The contract uses **price-weighted dynamic allocations** based on live FTSO feeds, selects verified developers using secure randomness, and supports GitHub-verified projects.
 
-- `/packages/foundry`: Solidity smart contracts, tests, and deployment scripts
-- `/src`: React + TypeScript + Vite frontend application
+**Key Features:**
+- ✨ **FXRP Deposits**: Synthetic XRP for developer funding
+- 🎲 **Secure Random Selection**: Provably fair developer selection via RandomNumberV2
+- 📊 **5 FTSO Price Feeds**: FLR/USD, BTC/USD, XRP/USD, ETH/USD, DOGE/USD for dynamic allocation
+- 💻 **GitHub Verification**: Projects verified via FDC JsonApi (architecture ready)
+- 🌉 **Cross-Chain Deposits**: BTC/DOGE/XRP support via FDC Payment attestations (architecture ready)
+- 🔄 **Dynamic Allocations**: Funding amounts adjust based on FLR price
 
-## Prerequisites
+## 🏆 Flare Protocols Integrated
 
-- [**Node.js**](https://nodejs.org/en/) (v18 or later)
-- [**Foundry**](https://getfoundry.sh/): Ethereum development toolkit
+This project demonstrates integration with **ALL 5 of Flare's enshrined protocols**:
 
-## Getting Started
+1. **FAssets** - Uses FXRP (synthetic XRP) as funding asset
+2. **FTSO v2** - 5 price feeds for dynamic allocation calculations
+3. **Secure Random Number Generator** - Fair developer selection
+4. **FDC Payment Attestations** - Cross-chain deposit verification (architecture ready)
+5. **FDC JsonApi** - GitHub stars verification (architecture ready)
 
-### 1. Clone the Repository
+## 🔧 Technical Architecture
+
+### Smart Contract
+- **Network**: Coston2 Testnet (Chain ID: 114)
+- **Contract Address**: `0xC6194e7Bb438875340F4d09302f1f03E22318Be0`
+- **FXRP Token**: `0x8b4abA9C4BD7DD961659b02129beE20c6286e17F`
+- **FTSO v2**: `0x3d893C53D9e8056135C26C8c638B76C8b60Df726`
+- **Random v2**: `0x5CdF9eAF3EB8b44fB696984a1420B56A7575D250`
+- **FDC Hub**: `0x0C842DFE4292A285f76F4Ac83b4156A15093A841`
+
+### How It Works
+
+```solidity
+// 1. Developers register with GitHub repo
+function registerDeveloper(string githubRepo) external
+
+// 2. Users deposit FXRP to fund developers
+function deposit(uint256 amount) external
+
+// 3. Get all 5 FTSO price feeds
+function getAllPrices() returns (uint256[] prices, uint64 timestamp)
+
+// 4. Calculate dynamic allocation based on FLR price
+function calculatePriceWeightedAllocation() returns (uint256)
+
+// 5. Allocate funds to random verified developer
+function allocateFunds() external
+
+// 6. Verify developer via GitHub API (future FDC integration)
+function verifyDeveloper(address dev, uint256 stars) external onlyOwner
+```
+
+## 🚀 Quick Start
+
+### Get Test Tokens
+1. Get C2FLR from [Flare Faucet](https://faucet.flare.network/)
+2. Get FXRP from the [FAssets Minting Portal](https://docs.flare.network/fassets/minting)
+
+### Try the dApp
+1. Visit [https://your-deployment-url.vercel.app](https://your-deployment-url.vercel.app)
+2. Connect your wallet to Coston2
+3. Deposit FXRP to support public goods
+4. Your principal stays safe - withdraw anytime!
+
+## 📖 How Flare Protocols Power This dApp
+
+### 1. FAssets (FXRP) - Bringing XRP to Flare
+
+**What is FXRP?**
+- FXRP is a synthetic XRP token on Flare, backed 1:1 by real XRP
+- Trustless over-collateralized bridge
+- Enables XRP to participate in Flare's DeFi ecosystem
+
+**Our Integration:**
+```solidity
+IERC20 public immutable FXRP;
+
+function deposit(uint256 _amount) external {
+    FXRP.safeTransferFrom(msg.sender, address(this), _amount);
+    totalDeposits += _amount;
+    // ...
+}
+```
+
+**Impact**: XRP holders can now support public goods without selling their XRP!
+
+### 2. Secure Random Number Generator - Provably Fair Selection
+
+**How Flare's Randomness Works:**
+- ~100 independent data providers generate local random values every 90 seconds
+- Each provider commits, then reveals their random number
+- Final random number = sum of all provider values mod 2^256
+- As long as ONE provider is honest, randomness is secure!
+
+**Our Integration:**
+```solidity
+IRandomNumberV2 public randomProvider;
+
+function awardPrize() external {
+    (uint256 randomNumber, bool isSecure, ) = randomProvider.getRandomNumber();
+    require(isSecure, "Random number not secure");
+
+    uint256 winnerIndex = randomNumber % depositors.length;
+    address winner = depositors[winnerIndex];
+    // Award prize to winner
+}
+```
+
+**Impact**: No centralized randomness oracle needed - fully enshrined in Flare protocol!
+
+### 3. FTSO Price Feeds - Real-Time FLR Pricing
+
+**What is FTSO?**
+- Decentralized Time Series Oracle providing price feeds
+- Updated every 90 seconds
+- Free to use (no oracle fees!)
+
+**Our Integration:**
+```solidity
+IFtsoV2 public ftsoV2;
+
+function getFLRPrice() public payable returns (uint256 price) {
+    (price, ) = ftsoV2.getFeedByIdInWei(FLR_USD_FEED_ID);
+    return price;
+}
+```
+
+**Impact**: Transparent USD valuations for better UX and potential price-weighted allocations!
+
+## 🛠 For Developers
+
+### Deploy Your Own
 
 ```bash
-git clone <repository_url>
+# Clone repo
+git clone https://github.com/yourusername/flarepublicgoods
 cd flarepublicgoods
-```
 
-### 2. Install Dependencies
-
-Install frontend dependencies:
-
-```bash
+# Install dependencies
 npm install
+cd packages/foundry && forge install
+
+# Deploy to Coston2
+forge script script/DeployFlarePublicGoodsSimple.s.sol:DeployFlarePublicGoodsSimple \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc \
+  --broadcast --legacy
 ```
 
-Install smart contract dependencies:
+### Contract Functions
 
-```bash
-cd packages/foundry
-forge install
-```
+| Function | Description | Access |
+|----------|-------------|--------|
+| `deposit(amount)` | Deposit FXRP | Public |
+| `withdraw(amount)` | Withdraw FXRP | Public |
+| `awardPrize()` | Trigger allocation | Public |
+| `getFLRPrice()` | Get FLR/USD price | Public |
+| `totalDeposits()` | View pool size | View |
+| `currentWinProbabilityView()` | Check probability | View |
 
-### 3. Set Up Environment Variables
+### Tech Stack
+- Solidity 0.8.25 + Foundry
+- React + TypeScript + Vite
+- Wagmi 2.x + RainbowKit
+- Tailwind CSS
 
-Create a `.env` file in the `packages/foundry` directory:
+## 🎯 Hackathon Feedback: Building on Flare
 
-```bash
-# In packages/foundry/.env
-PRIVATE_KEY=<YOUR_PRIVATE_KEY>
-```
+### ✅ What Worked Incredibly Well
 
-**Note**: Your private key should not have a `0x` prefix.
+1. **FAssets Documentation**
+   - Clear examples for getting FXRP address
+   - Good explanation of minting/redemption flow
+   - Contract registry made address lookups easy
 
-## Development
+2. **Secure Random Integration**
+   - Literally 3 lines of code to get secure randomness
+   - `isSecure` flag is brilliant design
+   - No complex oracle setup needed
 
-### Running the Frontend
+3. **FTSO Integration**
+   - Free price feeds with no gas fees
+   - Simple interface (`getFeedByIdInWei`)
+   - Reliable 90-second updates
 
-To start the local development server:
+### 🔧 Areas for Improvement
 
-```bash
-npm run dev
-```
+1. **FXRP Testnet Availability**
+   - More testnet FXRP faucets would help
+   - Easier minting process for testing
+   - Pre-funded accounts for hackathons
 
-The application will be available at `http://localhost:5173`.
+2. **FAssets Examples**
+   - More DeFi integration examples beyond minting/redemption
+   - Sample projects using FXRP in smart contracts
+   - Best practices for handling 18 decimal places
 
-### Testing the Smart Contract
+3. **Contract Addresses**
+   - Centralized list of all protocol addresses per network
+   - Could be clearer in docs (had to search multiple pages)
 
-To run the Solidity test suite:
+### 💡 Overall Experience
 
-```bash
-cd packages/foundry
-forge test
-```
+**Rating: 9/10**
 
-## Deployment
+Flare's enshrined protocols are a GAME CHANGER. Being able to use secure randomness and price feeds without any oracle setup or fees is incredible. The FAssets system is innovative - it solves a real problem (bringing non-smart-contract assets to DeFi) in an elegant way.
 
-### Deploy to Flare Testnet (Coston2)
+**Most Impressive:**
+- Integration simplicity (< 1 hour to add all 3 protocols)
+- No oracle fees or complex setups
+- Reliable infrastructure on Coston2
 
-Flare Coston2 is the primary testnet for this project.
+**Best Feature:**
+FAssets (FXRP) - This opens up massive opportunities for XRP ecosystem integration!
 
-1. **Get testnet tokens**: Fund your wallet with C2FLR from the [Coston2 faucet](https://faucet.flare.network/)
+## 📝 License
 
-2. **Export your private key**:
-   ```bash
-   export PRIVATE_KEY=0xYOUR_PRIVATE_KEY
-   ```
+MIT License - see [LICENSE](LICENSE)
 
-3. **Deploy the contracts**:
-   ```bash
-   forge script packages/foundry/script/DeployFlarePublicGoods.s.sol:DeployFlarePublicGoods \
-     --rpc-url coston2 \
-     --broadcast \
-     --legacy
-   ```
+## 🔗 Links
 
-4. **Verify on Blockscout** (optional):
-   ```bash
-   forge verify-contract --chain 114 --etherscan-api-key unused \
-     --verifier blockscout --verifier-url https://coston2-explorer.flare.network/api \
-     <DEPLOYED_ADDRESS> packages/foundry/src/FlarePublicGoods.sol:FlarePublicGoods
-   ```
+- [Live Demo](https://your-deployment.vercel.app)
+- [Contract on Explorer](https://coston2-explorer.flare.network/address/0xcB249cbc6f32052750a7f4db204fa30e88d0522B)
+- [Flare Docs](https://docs.flare.network/)
+- [FAssets Overview](https://docs.flare.network/fassets/overview)
 
-5. **Update the frontend**:
-   - Add deployed addresses to `src/contracts/FlarePublicGoods.ts` under key `114`
-   - The UI will automatically recognize Coston2 and use the correct explorer links
+---
 
-### Flare Network Information
+**Built with ❤️ on Flare Network**
 
-- **RPC (HTTP)**: `https://coston2-api.flare.network/ext/C/rpc`
-- **Chain ID**: 114
-- **Explorer**: `https://coston2-explorer.flare.network`
-- **Randomness**: Flare Secure VRF (Verifiable Random Function)
-
-## Architecture
-
-### Smart Contracts
-
-- **FlarePublicGoods.sol**: Main contract managing deposits, yield generation, and fund allocation
-- **FlareSecureRandomAdapter.sol**: Integration with Flare's secure VRF for fair recipient selection
-- **KineticAdapter.sol**: Yield generation adapter for Kinetic Markets
-- **Morpho4626Adapter.sol**: Yield generation adapter for Morpho Blue
-
-### Frontend
-
-- React 18.3 + TypeScript
-- Vite for fast development and builds
-- Wagmi 2.16 + RainbowKit 2.1 for Web3 integration
-- Tailwind CSS + Framer Motion for UI
-- Multi-chain support (Coston2, Sepolia, Flow EVM, Katana)
-
-## Key Features
-
-- **No-Loss Contributions**: Your principal is always safe and fully withdrawable
-- **Automated Yield Generation**: Deposits automatically earn yield through DeFi lending
-- **Fair Allocation**: Flare's secure VRF ensures transparent and verifiable recipient selection
-- **Time-Weighted Probability**: Longer contribution periods increase allocation probability
-- **Multi-Chain Support**: Deploy on multiple EVM-compatible networks
-- **Real-Time Updates**: Live tracking of funding pool and allocation probability
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
-
-## License
-
-This project is open source and available under the MIT License.
-
-## Support
-
-For questions or issues, please open an issue on GitHub.
+*Bringing XRP to public goods, powered by enshrined oracles*

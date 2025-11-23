@@ -1,349 +1,365 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.25;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ILendingAdapter} from "./interfaces/ILendingAdapter.sol";
-import {IRandomnessProvider} from "./interfaces/IRandomnessProvider.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
+interface IRandomNumberV2 {
+    function getRandomNumber() external view returns (uint256 randomNumber, bool isSecureRandom, uint256 randomTimestamp);
+}
+
+interface IFtsoV2 {
+    function getFeedByIdInWei(bytes21 feedId) external payable returns (uint256 value, uint64 timestamp);
+    function getFeedsByIdInWei(bytes21[] calldata feedIds) external payable returns (uint256[] memory values, uint64 timestamp);
+}
+
+interface IFdcHub {
+    function requestAttestation(bytes calldata data) external payable returns (bytes32);
+}
+
+interface IFdcVerification {
+    function verifyPayment(bytes calldata data) external view returns (bool);
+}
 
 /**
  * @title FlarePublicGoods
- * @dev A prize-linked savings account (PLSA) built on top of a lending adapter (ERC4626-style behind an adapter).
- *      Users deposit a common asset, the contract deposits via the adapter to generate yield, and the accumulated
- *      yield is awarded as a prize to a lucky depositor periodically.
+ * @notice Autonomous developer funding using Flare's enshrined protocols
+ * @dev Multi-chain deposits, FTSO price feeds, GitHub verification, and secure random distribution
  */
 contract FlarePublicGoods is Ownable {
     using SafeERC20 for IERC20;
-    //-//////////////////////////////////////////////////////////
-    //                           STATE
-    //-//////////////////////////////////////////////////////////
 
-    /// @dev The underlying ERC20 asset being deposited and supplied via the lending adapter.
-    address public immutable ASSET;
+    // ============ State Variables ============
 
-    /// @dev Lending adapter implementing ERC4626-like interface.
-    ILendingAdapter public immutable LENDING_ADAPTER;
+    /// @notice FXRP token
+    IERC20 public immutable FXRP;
 
-    /// @dev Randomness provider adapter.
-    IRandomnessProvider public randomnessProvider;
+    /// @notice Flare Random Number provider
+    IRandomNumberV2 public randomProvider;
 
-    /// @dev Timestamp of the last drawing attempt (successful or not).
-    uint256 public timestampLastDrawing;
+    /// @notice FTSO v2 for price feeds
+    IFtsoV2 public ftsoV2;
 
-    /// @dev Timestamp when a winner was last selected.
-    uint256 public timestampLastWinner;
+    /// @notice FDC Hub for attestations
+    IFdcHub public fdcHub;
 
-    /// @dev Base reward half-life (in seconds). After this time since the last drawing, base chance is 50%.
-    uint256 public baseRewardHalfLife;
+    /// @notice FDC Verification
+    IFdcVerification public fdcVerification;
 
-    /// @dev Half-life of the half-life. After every `halfLife2` elapsed since the last winner,
-    ///      the effective half-life is cut in half.
-    uint256 public halfLife2;
+    // FTSO Feed IDs (from Flare docs)
+    bytes21 public constant FLR_USD_FEED = bytes21(0x01464c522f55534400000000000000000000000000); // FLR/USD
+    bytes21 public constant BTC_USD_FEED = bytes21(0x014254432f55534400000000000000000000000000); // BTC/USD
+    bytes21 public constant XRP_USD_FEED = bytes21(0x015852502f55534400000000000000000000000000); // XRP/USD
+    bytes21 public constant ETH_USD_FEED = bytes21(0x014554482f55534400000000000000000000000000); // ETH/USD
+    bytes21 public constant DOGE_USD_FEED = bytes21(0x01444f47452f555344000000000000000000000000); // DOGE/USD
 
-    /// @dev The total principal amount deposited by all users. This should only
-    //      increase on deposit and decrease on withdraw.
-    uint256 public totalPrincipal;
-
-    /// @dev Mapping from user address to their principal balance.
-    mapping(address => uint256) public balanceOf;
-
-    /// @dev Array of all unique depositors, used for the prize draw.
-    address[] public depositors;
-
-    /// @dev Mapping to track the index of a depositor in the `depositors` array for O(1) removal.
-    mapping(address => uint256) private depositorIndex;
-
-    /// @dev The winner of the last prize round.
-    address public lastWinner;
-
-    /// @dev The amount of the last prize awarded.
-    uint256 public lastPrizeAmount;
-
-    /// @dev The number of vault shares owned by this contract.
-    uint256 public vaultShares;
-
-    //-//////////////////////////////////////////////////////////
-    //                          EVENTS
-    //-//////////////////////////////////////////////////////////
-
-    event Deposited(address indexed user, uint256 amount);
-    event Withdrawn(address indexed user, uint256 amount);
-    event PrizeAwarded(address indexed winner, uint256 amount);
-    event PrizeNotAwarded(address indexed caller);
-    event RandomnessProviderUpdated(address indexed newProvider);
-    event HalfLifeParamsUpdated(uint256 baseRewardHalfLife, uint256 halfLife2);
-
-    //-//////////////////////////////////////////////////////////
-    //                        CONSTRUCTOR
-    //-//////////////////////////////////////////////////////////
-
-    constructor(address _adapter, address _randomnessProvider, uint256 _baseRewardHalfLife, uint256 _halfLife2)
-        Ownable(msg.sender)
-    {
-        ASSET = ILendingAdapter(_adapter).asset();
-        LENDING_ADAPTER = ILendingAdapter(_adapter);
-        randomnessProvider = IRandomnessProvider(_randomnessProvider);
-        require(_baseRewardHalfLife > 0, "baseRewardHalfLife must be > 0");
-        require(_halfLife2 > 0, "halfLife2 must be > 0");
-        baseRewardHalfLife = _baseRewardHalfLife;
-        halfLife2 = _halfLife2;
-        timestampLastDrawing = block.timestamp;
-        timestampLastWinner = block.timestamp;
+    /// @notice Developer projects registry
+    struct Developer {
+        address wallet;
+        string githubRepo; // e.g. "owner/repo"
+        uint256 totalFunded;
+        uint256 githubStars; // Verified via JsonApi
+        bool verified;
+        uint256 lastFundedTimestamp;
     }
 
-    //-//////////////////////////////////////////////////////////
-    //                     USER-FACING FUNCTIONS
-    //-//////////////////////////////////////////////////////////
+    /// @notice Deposit tracking
+    struct Deposit {
+        address depositor;
+        uint256 amount;
+        uint256 timestamp;
+        string sourceChain; // "BTC", "DOGE", "XRP", "FXRP"
+    }
+
+    /// @notice Allocation weights based on price feeds
+    struct AllocationConfig {
+        uint256 minPriceThreshold; // Minimum FLR price for allocation (in USD wei)
+        uint256 priceMultiplier; // Multiplier for price-weighted allocation (basis points)
+        bool dynamicReallocation; // Enable automatic reallocation
+    }
+
+    // Storage
+    mapping(address => Developer) public developers;
+    address[] public developerList;
+    mapping(address => uint256) public depositBalances;
+    Deposit[] public deposits;
+    AllocationConfig public allocationConfig;
+
+    // Stats
+    uint256 public totalDeposits;
+    uint256 public totalFundedDevelopers;
+    uint256 public nextAllocationTimestamp;
+    uint256 public allocationInterval = 7 days; // Weekly allocations
+    address public lastFundedDev;
+    uint256 public lastAllocationAmount;
+
+    // ============ Events ============
+
+    event DeveloperRegistered(address indexed wallet, string githubRepo);
+    event DeveloperVerified(address indexed wallet, uint256 githubStars);
+    event DepositReceived(address indexed depositor, uint256 amount, string sourceChain);
+    event DeveloperFunded(address indexed developer, uint256 amount, uint256 flrPrice);
+    event AllocationConfigUpdated(uint256 minPrice, uint256 multiplier, bool dynamicReallocation);
+    event CrossChainDepositVerified(string sourceChain, uint256 amount, bytes32 txHash);
+
+    // ============ Constructor ============
+
+    constructor(
+        address _fxrp,
+        address _randomProvider,
+        address _ftsoV2,
+        address _fdcHub,
+        address _fdcVerification
+    ) Ownable(msg.sender) {
+        require(_fxrp != address(0), "Invalid FXRP");
+        require(_randomProvider != address(0), "Invalid random provider");
+        require(_ftsoV2 != address(0), "Invalid FTSO");
+
+        FXRP = IERC20(_fxrp);
+        randomProvider = IRandomNumberV2(_randomProvider);
+        ftsoV2 = IFtsoV2(_ftsoV2);
+        fdcHub = IFdcHub(_fdcHub);
+        fdcVerification = IFdcVerification(_fdcVerification);
+
+        // Default allocation config
+        allocationConfig = AllocationConfig({
+            minPriceThreshold: 0.01 ether, // $0.01 FLR minimum
+            priceMultiplier: 10000, // 100% (basis points)
+            dynamicReallocation: true
+        });
+
+        nextAllocationTimestamp = block.timestamp + allocationInterval;
+    }
+
+    // ============ Developer Registration ============
 
     /**
-     * @notice Deposits assets into the PLSA.
-     * @param _amount The amount of `asset` to deposit.
-     * @dev The caller must have approved the contract to spend `_amount` of `asset`.
+     * @notice Register as a developer to receive funding
+     * @param _githubRepo GitHub repository (owner/repo format)
+     */
+    function registerDeveloper(string calldata _githubRepo) external {
+        require(developers[msg.sender].wallet == address(0), "Already registered");
+        require(bytes(_githubRepo).length > 0, "Invalid repo");
+
+        developers[msg.sender] = Developer({
+            wallet: msg.sender,
+            githubRepo: _githubRepo,
+            totalFunded: 0,
+            githubStars: 0,
+            verified: false,
+            lastFundedTimestamp: 0
+        });
+
+        developerList.push(msg.sender);
+        emit DeveloperRegistered(msg.sender, _githubRepo);
+    }
+
+    /**
+     * @notice Verify developer's GitHub stars (owner only for now, will use JsonApi FDC)
+     * @param _developer Developer address
+     * @param _stars Number of GitHub stars
+     */
+    function verifyDeveloper(address _developer, uint256 _stars) external onlyOwner {
+        require(developers[_developer].wallet != address(0), "Developer not registered");
+
+        developers[_developer].githubStars = _stars;
+        developers[_developer].verified = _stars >= 100; // Minimum 100 stars
+
+        emit DeveloperVerified(_developer, _stars);
+    }
+
+    // ============ Deposit Functions ============
+
+    /**
+     * @notice Direct FXRP deposit
+     * @param _amount Amount of FXRP to deposit
      */
     function deposit(uint256 _amount) external {
-        require(_amount > 0, "Deposit amount must be greater than zero");
+        require(_amount > 0, "Amount must be > 0");
 
-        if (balanceOf[msg.sender] == 0) {
-            depositors.push(msg.sender);
-            depositorIndex[msg.sender] = depositors.length - 1;
-        }
+        FXRP.safeTransferFrom(msg.sender, address(this), _amount);
+        depositBalances[msg.sender] += _amount;
+        totalDeposits += _amount;
 
-        balanceOf[msg.sender] += _amount;
-        totalPrincipal += _amount;
+        deposits.push(Deposit({
+            depositor: msg.sender,
+            amount: _amount,
+            timestamp: block.timestamp,
+            sourceChain: "FXRP"
+        }));
 
-        emit Deposited(msg.sender, _amount);
-
-        // Pull funds from user into this contract (supports non-standard ERC20s)
-        IERC20(ASSET).safeTransferFrom(msg.sender, address(this), _amount);
-        // Approve adapter to pull from this contract and deposit; forceApprove handles zero-first tokens
-        SafeERC20.forceApprove(IERC20(ASSET), address(LENDING_ADAPTER), _amount);
-        uint256 sharesOut = LENDING_ADAPTER.deposit(_amount);
-        vaultShares += sharesOut;
+        emit DepositReceived(msg.sender, _amount, "FXRP");
     }
 
     /**
-     * @notice Withdraws principal from the PLSA.
-     * @param _amount The amount of `asset` to withdraw.
-     * @dev Users can only withdraw up to their deposited principal.
+     * @notice Verify cross-chain deposit via FDC Payment attestation
+     * @param _proof FDC Payment proof
+     * @param _sourceChain Source chain ("BTC", "DOGE", "XRP")
+     * @dev In production, this would mint FXRP based on verified payment
      */
-    function withdraw(uint256 _amount) external {
-        require(_amount > 0, "Withdraw amount must be greater than zero");
-        uint256 userBalance = balanceOf[msg.sender];
-        require(userBalance >= _amount, "Insufficient balance");
+    function depositViaFDC(bytes calldata _proof, string calldata _sourceChain) external {
+        // TODO: Implement FDC Payment verification
+        // For now, this is a placeholder showing the concept
 
-        // Note: This check implicitly protects the prize pool. Users can only withdraw
-        // their principal, not the yield generated from it.
-        require(totalAssets() >= totalPrincipal, "Contract is undercollateralized");
+        // require(fdcVerification.verifyPayment(_proof), "Invalid proof");
 
-        balanceOf[msg.sender] -= _amount;
-        totalPrincipal -= _amount;
+        // Parse proof to get amount and sender
+        // Mint FXRP for depositor
+        // Track deposit
 
-        if (userBalance - _amount == 0) {
-            _removeDepositor(msg.sender);
-        }
-
-        emit Withdrawn(msg.sender, _amount);
-
-        // Withdraw from adapter directly to the user
-        uint256 sharesBurned = LENDING_ADAPTER.withdraw(_amount, msg.sender);
-        if (sharesBurned > vaultShares) {
-            vaultShares = 0;
-        } else {
-            vaultShares -= sharesBurned;
-        }
+        emit CrossChainDepositVerified(_sourceChain, 0, bytes32(0));
     }
 
-    //-//////////////////////////////////////////////////////////
-    //                    PRIZE-RELATED FUNCTIONS
-    //-//////////////////////////////////////////////////////////
+    // ============ FTSO Price Feed Functions ============
 
     /**
-     * @notice Attempts to award the current prize pool to a random depositor based on a time-decaying threshold.
-     * @dev Can be called at any time. If the random draw does not pass the threshold, no prize is awarded.
+     * @notice Get all relevant price feeds
+     * @return prices Array of prices [FLR, BTC, XRP, ETH, DOGE]
+     * @return timestamp Latest update timestamp
      */
-    function awardPrize() external {
-        require(depositors.length > 0, "No depositors available");
+    function getAllPrices() public payable returns (uint256[] memory prices, uint64 timestamp) {
+        bytes21[] memory feedIds = new bytes21[](5);
+        feedIds[0] = FLR_USD_FEED;
+        feedIds[1] = BTC_USD_FEED;
+        feedIds[2] = XRP_USD_FEED;
+        feedIds[3] = ETH_USD_FEED;
+        feedIds[4] = DOGE_USD_FEED;
 
-        // Draw a random number once and reuse it for threshold decision and winner selection
-        uint256 r = randomnessProvider.randomUint256(bytes32(depositors.length));
-
-        // Compute deterministic, smoothly interpolated threshold
-        uint256 threshold = _currentWinThreshold();
-
-        if (r >= threshold) {
-            // Did not pass threshold; update last drawing timestamp and exit
-            timestampLastDrawing = block.timestamp;
-            emit PrizeNotAwarded(msg.sender);
-            return;
-        }
-
-        uint256 prize = prizePool();
-        if (prize == 0) {
-            // Nothing to award; do not revert to allow spammable calls
-            return;
-        }
-
-        // Select winner using the same random draw
-        uint256 idx = r % depositors.length;
-        address winner = depositors[idx];
-
-        // Credit the winner's principal balance with the prize, keeping assets in the adapter
-        balanceOf[winner] += prize;
-        totalPrincipal += prize;
-
-        lastWinner = winner;
-        lastPrizeAmount = prize;
-        timestampLastWinner = block.timestamp;
-
-        emit PrizeAwarded(winner, prize);
-
-        // Update last drawing timestamp after a successful draw as well
-        timestampLastDrawing = block.timestamp;
-    }
-
-    //-//////////////////////////////////////////////////////////
-    //                    OWNER-ONLY FUNCTIONS
-    //-//////////////////////////////////////////////////////////
-
-    function setRandomnessProvider(address _provider) external onlyOwner {
-        require(_provider != address(0), "Invalid provider");
-        randomnessProvider = IRandomnessProvider(_provider);
-        emit RandomnessProviderUpdated(_provider);
-    }
-
-    function setHalfLifeParams(uint256 _baseRewardHalfLife, uint256 _halfLife2) external onlyOwner {
-        require(_baseRewardHalfLife > 0, "baseRewardHalfLife must be > 0");
-        require(_halfLife2 > 0, "halfLife2 must be > 0");
-        baseRewardHalfLife = _baseRewardHalfLife;
-        halfLife2 = _halfLife2;
-        emit HalfLifeParamsUpdated(_baseRewardHalfLife, _halfLife2);
-    }
-
-    //-//////////////////////////////////////////////////////////
-    //                  INTERNAL HELPER FUNCTIONS
-    //-//////////////////////////////////////////////////////////
-
-    /**
-     * @dev Removes a depositor from the `depositors` array.
-     *      Uses the swap-and-pop technique for O(1) removal.
-     */
-    function _removeDepositor(address _depositor) private {
-        uint256 index = depositorIndex[_depositor];
-        address lastDepositor = depositors[depositors.length - 1];
-
-        // If the depositor to remove is not the last one, swap it
-        if (index < depositors.length - 1) {
-            depositors[index] = lastDepositor;
-            depositorIndex[lastDepositor] = index;
-        }
-
-        // Remove the last element
-        depositors.pop();
-        delete depositorIndex[_depositor];
-    }
-
-    //-//////////////////////////////////////////////////////////
-    //                         VIEW FUNCTIONS
-    //-//////////////////////////////////////////////////////////
-
-    /**
-     * @notice Calculates the total value of assets held by this contract,
-     *         including principal and yield generated via the adapter.
-     * @return The total asset balance.
-     */
-    function totalAssets() public view returns (uint256) {
-        if (vaultShares == 0) return 0;
-        return LENDING_ADAPTER.convertToAssets(vaultShares);
+        return ftsoV2.getFeedsByIdInWei(feedIds);
     }
 
     /**
-     * @notice Calculates the current prize pool amount.
-     * @return The prize amount, which is the yield generated so far.
+     * @notice Get FLR/USD price
      */
-    function prizePool() public view returns (uint256) {
-        uint256 ta = totalAssets();
-        return ta > totalPrincipal ? (ta - totalPrincipal) : 0;
+    function getFLRPrice() public payable returns (uint256 price, uint64 timestamp) {
+        return ftsoV2.getFeedByIdInWei(FLR_USD_FEED);
     }
 
     /**
-     * @notice Returns the number of unique depositors.
+     * @notice Calculate allocation amount based on FLR price
+     * @return allocation Calculated allocation amount
      */
-    function numberOfDepositors() public view returns (uint256) {
-        return depositors.length;
-    }
+    function calculatePriceWeightedAllocation() public payable returns (uint256 allocation) {
+        (uint256 flrPrice,) = getFLRPrice();
 
-    // Back-compat: expose a vault() view that returns the adapter address
-    function vault() external view returns (address) {
-        return address(LENDING_ADAPTER);
-    }
-
-    /// @notice Returns the current effective half-life after accounting for time since last winner.
-    function currentEffectiveHalfLife() external view returns (uint256) {
-        return _effectiveHalfLife();
-    }
-
-    /// @notice Returns the current win probability as a WAD (1e18 precision).
-    /// @dev Probability p is computed from the current threshold T as p = T / 2^256.
-    function currentWinProbability() external view returns (uint256) {
-        uint256 threshold = _currentWinThreshold();
-        return Math.mulDiv(threshold, 1e18, type(uint256).max);
-    }
-
-    /// @notice Returns the current threshold used to determine whether a prize is awarded.
-    function currentWinThreshold() external view returns (uint256) {
-        return _currentWinThreshold();
-    }
-
-    //-//////////////////////////////////////////////////////////
-    //                      INTERNAL VIEWS
-    //-//////////////////////////////////////////////////////////
-
-    function _effectiveHalfLife() internal view returns (uint256) {
-        // Decrease half-life over time since the last winner, halving every `halfLife2`
-        uint256 sinceWinner = block.timestamp - timestampLastWinner;
-        uint256 halves = sinceWinner / halfLife2;
-        if (halves > 255) halves = 255; // avoid oversized shifts
-        uint256 hl = baseRewardHalfLife >> halves;
-        if (hl == 0) hl = 1; // clamp to at least 1 to avoid division by zero
-        return hl;
-    }
-
-    function _currentWinThreshold() internal view returns (uint256) {
-        uint256 hl = _effectiveHalfLife();
-        uint256 elapsed = block.timestamp - timestampLastDrawing;
-        uint256 n = elapsed / hl; // number of completed half-lives
-        uint256 rem = elapsed % hl; // remainder within the current half-life
-
-        if (n >= 256) {
-            return type(uint256).max; // effectively guaranteed win
+        if (flrPrice < allocationConfig.minPriceThreshold) {
+            return (totalDeposits * 5) / 100; // 5% baseline when price is low
         }
 
-        // t0 = threshold at integer n
-        uint256 t0;
-        if (n == 0) {
-            t0 = 0;
-        } else {
-            uint256 pow0 = uint256(1) << (256 - n);
-            unchecked {
-                t0 = type(uint256).max - (pow0 - 1);
+        // Price-weighted: higher FLR price = higher allocation
+        uint256 priceBonus = (flrPrice * allocationConfig.priceMultiplier) / 1 ether;
+        uint256 baseAllocation = (totalDeposits * 10) / 100; // 10% base
+
+        allocation = baseAllocation + (baseAllocation * priceBonus) / 10000;
+
+        // Cap at 20% of pool
+        uint256 maxAllocation = (totalDeposits * 20) / 100;
+        if (allocation > maxAllocation) {
+            allocation = maxAllocation;
+        }
+    }
+
+    // ============ Allocation Functions ============
+
+    /**
+     * @notice Allocate funds to verified developers
+     * @dev Uses Secure Random to select developer
+     */
+    function allocateFunds() external {
+        require(block.timestamp >= nextAllocationTimestamp, "Not time yet");
+        require(developerList.length > 0, "No developers");
+        require(totalDeposits > 0, "No funds");
+
+        // Calculate allocation amount using price feeds
+        uint256 allocationAmount = calculatePriceWeightedAllocation();
+        require(allocationAmount > 0, "No allocation available");
+
+        // Get secure random number
+        (uint256 randomNumber, bool isSecure,) = randomProvider.getRandomNumber();
+        require(isSecure, "Random not secure");
+
+        // Filter verified developers
+        address[] memory verifiedDevs = new address[](developerList.length);
+        uint256 verifiedCount = 0;
+
+        for (uint256 i = 0; i < developerList.length; i++) {
+            if (developers[developerList[i]].verified) {
+                verifiedDevs[verifiedCount] = developerList[i];
+                verifiedCount++;
             }
         }
 
-        // If exactly on boundary, no interpolation
-        if (rem == 0) {
-            return t0;
-        }
+        require(verifiedCount > 0, "No verified developers");
 
-        // t1 - t0 = 2^(256 - (n + 1))
-        uint256 pow1 = uint256(1) << (256 - (n + 1));
-        uint256 delta = pow1;
+        // Select developer using random number
+        uint256 selectedIndex = randomNumber % verifiedCount;
+        address selectedDev = verifiedDevs[selectedIndex];
 
-        // Interpolate: threshold = t0 + delta * rem / hl
-        uint256 interp = Math.mulDiv(delta, rem, hl);
-        unchecked {
-            return t0 + interp;
+        // Get current FLR price for event
+        (uint256 flrPrice,) = getFLRPrice();
+
+        // Transfer allocation
+        FXRP.safeTransfer(selectedDev, allocationAmount);
+
+        // Update state
+        developers[selectedDev].totalFunded += allocationAmount;
+        developers[selectedDev].lastFundedTimestamp = block.timestamp;
+        totalFundedDevelopers++;
+        totalDeposits -= allocationAmount;
+        lastFundedDev = selectedDev;
+        lastAllocationAmount = allocationAmount;
+        nextAllocationTimestamp = block.timestamp + allocationInterval;
+
+        emit DeveloperFunded(selectedDev, allocationAmount, flrPrice);
+    }
+
+    // ============ Admin Functions ============
+
+    /**
+     * @notice Update allocation configuration
+     */
+    function setAllocationConfig(
+        uint256 _minPrice,
+        uint256 _multiplier,
+        bool _dynamicReallocation
+    ) external onlyOwner {
+        allocationConfig.minPriceThreshold = _minPrice;
+        allocationConfig.priceMultiplier = _multiplier;
+        allocationConfig.dynamicReallocation = _dynamicReallocation;
+
+        emit AllocationConfigUpdated(_minPrice, _multiplier, _dynamicReallocation);
+    }
+
+    /**
+     * @notice Set allocation interval
+     */
+    function setAllocationInterval(uint256 _interval) external onlyOwner {
+        require(_interval >= 1 days, "Interval too short");
+        allocationInterval = _interval;
+    }
+
+    // ============ View Functions ============
+
+    function getDeveloperCount() external view returns (uint256) {
+        return developerList.length;
+    }
+
+    function getVerifiedDeveloperCount() external view returns (uint256) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < developerList.length; i++) {
+            if (developers[developerList[i]].verified) {
+                count++;
+            }
         }
+        return count;
+    }
+
+    function getDepositCount() external view returns (uint256) {
+        return deposits.length;
+    }
+
+    function getDeveloper(address _dev) external view returns (Developer memory) {
+        return developers[_dev];
     }
 }

@@ -2,27 +2,47 @@
 export const CONTRACTS = {
   11155111: { // Sepolia testnet
     flarePublicGoods: '0x3cb0f6582683204d013c1bab52067ce351aa3bef',
-    usdc: '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8'
+    usdc: '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8',
+    wflr: '0x0000000000000000000000000000000000000000' // Not available on Sepolia
   },
   1: { // Ethereum mainnet (Tenderly VNet)
-    // Fresh deploy from your run: FlarePublicGoods
     flarePublicGoods: '0x057992Ef2b383cFe6b0a2E4df54234B845ec9720',
-    // Use canonical mainnet USDC on the fork
-    usdc: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    usdc: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    wflr: '0x0000000000000000000000000000000000000000' // Not available on Ethereum
   },
   114: { // Flare testnet (Coston2)
-    // Deployed FlarePublicGoods + underlying from Kinetic market
-    flarePublicGoods: '0x78890D0059FD06DF96B24Df545bDCB12569e2D7d',
-    usdc: '0xCe987892D5AD2990b8279e8F76530CfF72977666'
-  },
-  747474: { // Katana mainnet
-    flarePublicGoods: '0xdB9212aF6019C137AC321d36DCEB3e174D933b37',
-    usdc: '0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36'
+    flarePublicGoods: '0xC6194e7Bb438875340F4d09302f1f03E22318Be0', // Multi-protocol FlarePublicGoods
+    usdc: '0xCe987892D5AD2990b8279e8F76530CfF72977666',
+    wflr: '0xCa839F8a3aFe95D4B8F8D5E0AE96Eab7cB90Dabb', // WFLR on Coston2
+    fxrp: '0x8b4abA9C4BD7DD961659b02129beE20c6286e17F' // FXRP on Coston2
   },
   545: { // Flow EVM Testnet
     flarePublicGoods: '0x7d12dc1ec75675dafcf0e0651a6bc14a94d6e338',
-    usdc: '0x2aaBea2058b5aC2D339b163C6Ab6f2b6d53aabED'
+    usdc: '0x2aaBea2058b5aC2D339b163C6Ab6f2b6d53aabED',
+    wflr: '0x0000000000000000000000000000000000000000' // Not available on Flow
   },
+} as const;
+
+// Token info for UI
+export const SUPPORTED_TOKENS = {
+  USDC: {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    decimals: 6,
+    icon: '💵'
+  },
+  WFLR: {
+    symbol: 'WFLR',
+    name: 'Wrapped Flare',
+    decimals: 18,
+    icon: '🔥'
+  },
+  FXRP: {
+    symbol: 'FXRP',
+    name: 'Flare XRP',
+    decimals: 18,
+    icon: '✨'
+  }
 } as const;
 
 // Default to Flare testnet (Coston2) as primary; fallback to Sepolia, then Tenderly mainnet
@@ -43,71 +63,75 @@ export const flarePublicGoodsAbi = [
   {
     anonymous: false,
     inputs: [
-      { indexed: true, internalType: 'address', name: 'winner', type: 'address' },
-      { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' }
+      { indexed: true, internalType: 'address', name: 'developer', type: 'address' },
+      { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
+      { indexed: false, internalType: 'uint256', name: 'allocationNumber', type: 'uint256' }
     ],
-    name: 'PrizeAwarded',
+    name: 'FundsAllocated',
     type: 'event'
   },
   {
     anonymous: false,
     inputs: [
-      { indexed: true, internalType: 'address', name: 'caller', type: 'address' }
+      { indexed: true, internalType: 'address', name: 'developer', type: 'address' },
+      { indexed: false, internalType: 'string', name: 'githubRepo', type: 'string' }
     ],
-    name: 'PrizeNotAwarded',
+    name: 'DeveloperRegistered',
     type: 'event'
   },
+  // Read Functions - Core
+  { inputs: [], name: 'FXRP', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'totalDeposits', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ internalType: 'address', name: '', type: 'address' }], name: 'depositBalances', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'nextAllocationTime', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'allocationInterval', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'lastFundedDev', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'lastAllocationAmount', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'allocationCount', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+
+  // FTSO Price Functions
+  { inputs: [], name: 'getAllPrices', outputs: [{ internalType: 'uint256[]', name: 'prices', type: 'uint256[]' }, { internalType: 'uint64', name: 'timestamp', type: 'uint64' }], stateMutability: 'payable', type: 'function' },
+  { inputs: [], name: 'getFLRPrice', outputs: [{ internalType: 'uint256', name: 'price', type: 'uint256' }, { internalType: 'uint64', name: 'timestamp', type: 'uint64' }], stateMutability: 'payable', type: 'function' },
+  { inputs: [], name: 'calculatePriceWeightedAllocation', outputs: [{ internalType: 'uint256', name: 'allocation', type: 'uint256' }], stateMutability: 'payable', type: 'function' },
   {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: 'address', name: 'user', type: 'address' },
-      { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' }
+    inputs: [],
+    name: 'allocationConfig',
+    outputs: [
+      { internalType: 'uint256', name: 'minPriceThreshold', type: 'uint256' },
+      { internalType: 'uint256', name: 'priceMultiplier', type: 'uint256' },
+      { internalType: 'bool', name: 'dynamicReallocation', type: 'bool' }
     ],
-    name: 'Withdrawn',
-    type: 'event'
+    stateMutability: 'view',
+    type: 'function'
   },
+
+  // Developer Functions
+  { inputs: [], name: 'getDeveloperCount', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'getVerifiedDeveloperCount', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
   {
-    anonymous: false,
-    inputs: [
-      { indexed: false, internalType: 'uint256', name: 'oldDuration', type: 'uint256' },
-      { indexed: false, internalType: 'uint256', name: 'newDuration', type: 'uint256' }
-    ],
-    name: 'RoundDurationUpdated',
-    type: 'event'
+    inputs: [{ internalType: 'address', name: '_dev', type: 'address' }],
+    name: 'getDeveloper',
+    outputs: [{
+      internalType: 'tuple',
+      name: '',
+      type: 'tuple',
+      components: [
+        { internalType: 'address', name: 'wallet', type: 'address' },
+        { internalType: 'string', name: 'githubRepo', type: 'string' },
+        { internalType: 'uint256', name: 'totalFunded', type: 'uint256' },
+        { internalType: 'uint256', name: 'githubStars', type: 'uint256' },
+        { internalType: 'bool', name: 'verified', type: 'bool' },
+        { internalType: 'uint256', name: 'lastFundedTimestamp', type: 'uint256' }
+      ]
+    }],
+    stateMutability: 'view',
+    type: 'function'
   },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: 'address', name: 'newProvider', type: 'address' }
-    ],
-    name: 'RandomnessProviderUpdated',
-    type: 'event'
-  },
-  // Read Functions
-  { inputs: [], name: 'ASSET', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'vault', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
-  { inputs: [{ internalType: 'address', name: '', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], name: 'depositors', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'lastPrizeAmount', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'lastWinner', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'nextRoundTimestamp', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'numberOfDepositors', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'prizePool', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'roundDuration', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'totalAssets', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'totalPrincipal', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'vaultShares', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'owner', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
-  // New probability/threshold views
-  { inputs: [], name: 'currentWinProbability', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'currentWinThreshold', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-  { inputs: [], name: 'currentEffectiveHalfLife', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], name: 'developerList', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+
   // Write Functions
-  { inputs: [], name: 'awardPrize', outputs: [], stateMutability: 'nonpayable', type: 'function' },
   { inputs: [{ internalType: 'uint256', name: '_amount', type: 'uint256' }], name: 'deposit', outputs: [], stateMutability: 'nonpayable', type: 'function' },
-  { inputs: [{ internalType: 'uint256', name: '_amount', type: 'uint256' }], name: 'withdraw', outputs: [], stateMutability: 'nonpayable', type: 'function' },
-  { inputs: [{ internalType: 'uint256', name: '_roundDuration', type: 'uint256' }], name: 'setRoundDuration', outputs: [], stateMutability: 'nonpayable', type: 'function' },
-  { inputs: [{ internalType: 'address', name: '_provider', type: 'address' }], name: 'setRandomnessProvider', outputs: [], stateMutability: 'nonpayable', type: 'function' },
-  { inputs: [], name: 'renounceOwnership', outputs: [], stateMutability: 'nonpayable', type: 'function' },
-  { inputs: [{ internalType: 'address', name: 'newOwner', type: 'address' }], name: 'transferOwnership', outputs: [], stateMutability: 'nonpayable', type: 'function' }
+  { inputs: [{ internalType: 'string', name: '_githubRepo', type: 'string' }], name: 'registerDeveloper', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+  { inputs: [], name: 'allocateFunds', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+  { inputs: [{ internalType: 'address', name: '_dev', type: 'address' }, { internalType: 'uint256', name: '_stars', type: 'uint256' }], name: 'verifyDeveloper', outputs: [], stateMutability: 'nonpayable', type: 'function' }
 ] as const;

@@ -16,8 +16,10 @@ import Home from './pages/Home';
 import Pool from './pages/Pool';
 import HistoryPage from './pages/History';
 import Profile from './pages/Profile';
+import Developers from './pages/Developers';
+import Prices from './pages/Prices';
 import { CONTRACTS } from './contracts/FlarePublicGoods';
-import { Coffee, Wallet, BarChart3, History, User } from 'lucide-react';
+import { Coffee, Wallet, BarChart3, History, User, Code2, TrendingUp } from 'lucide-react';
 import FlareLoader from './components/FlareLoader';
 import Logo from './components/Logo';
 import { useIsMobile } from './hooks/use-mobile';
@@ -70,33 +72,61 @@ const BottomNavigation = () => {
               location.pathname === '/' ? 'text-[#181411]' : 'text-[#8a7360]'
             }`}
           >
-            Account
+            Deposit
           </p>
         </Link>
 
         <Link
-          to='/pool'
+          to='/developers'
           className={`flex flex-1 flex-col items-center justify-end gap-1 ${
-            location.pathname === '/pool' ? 'text-[#181411]' : 'text-[#8a7360]'
+            location.pathname === '/developers' ? 'text-[#181411]' : 'text-[#8a7360]'
           }`}
         >
           <div
             className={`flex h-8 items-center justify-center ${
-              location.pathname === '/pool'
+              location.pathname === '/developers'
                 ? 'text-[#181411]'
                 : 'text-[#8a7360]'
             }`}
           >
-            <BarChart3 className='w-5 h-5' />
+            <Code2 className='w-5 h-5' />
           </div>
           <p
             className={`text-xs font-medium leading-normal tracking-[0.015em] ${
-              location.pathname === '/pool'
+              location.pathname === '/developers'
                 ? 'text-[#181411]'
                 : 'text-[#8a7360]'
             }`}
           >
-            Impact
+            Developers
+          </p>
+        </Link>
+
+        <Link
+          to='/prices'
+          className={`flex flex-1 flex-col items-center justify-end gap-1 ${
+            location.pathname === '/prices'
+              ? 'text-[#181411]'
+              : 'text-[#8a7360]'
+          }`}
+        >
+          <div
+            className={`flex h-8 items-center justify-end gap-1 ${
+              location.pathname === '/prices'
+                ? 'text-[#181411]'
+                : 'text-[#8a7360]'
+            }`}
+          >
+            <TrendingUp className='w-5 h-5' />
+          </div>
+          <p
+            className={`text-xs font-medium leading-normal tracking-[0.015em] ${
+              location.pathname === '/prices'
+                ? 'text-[#181411]'
+                : 'text-[#8a7360]'
+            }`}
+          >
+            Prices
           </p>
         </Link>
 
@@ -109,7 +139,7 @@ const BottomNavigation = () => {
           }`}
         >
           <div
-            className={`flex h-8 items-center justify-end gap-1 ${
+            className={`flex h-8 items-center justify-center ${
               location.pathname === '/history'
                 ? 'text-[#181411]'
                 : 'text-[#8a7360]'
@@ -124,35 +154,7 @@ const BottomNavigation = () => {
                 : 'text-[#8a7360]'
             }`}
           >
-            History
-          </p>
-        </Link>
-
-        <Link
-          to='/profile'
-          className={`flex flex-1 flex-col items-center justify-end gap-1 ${
-            location.pathname === '/profile'
-              ? 'text-[#181411]'
-              : 'text-[#8a7360]'
-          }`}
-        >
-          <div
-            className={`flex h-8 items-center justify-center ${
-              location.pathname === '/profile'
-                ? 'text-[#181411]'
-                : 'text-[#8a7360]'
-            }`}
-          >
-            <User className='w-5 h-5' />
-          </div>
-          <p
-            className={`text-xs font-medium leading-normal tracking-[0.015em] ${
-              location.pathname === '/profile'
-                ? 'text-[#181411]'
-                : 'text-[#8a7360]'
-            }`}
-          >
-            Profile
+            Activity
           </p>
         </Link>
       </div>
@@ -164,10 +166,10 @@ const DesktopSidebar = () => {
   const location = useLocation();
 
   const navItems = [
-    { path: '/', label: 'Account', icon: Wallet },
-    { path: '/pool', label: 'Impact', icon: BarChart3 },
+    { path: '/', label: 'Deposit', icon: Wallet },
+    { path: '/developers', label: 'Developers', icon: Code2 },
+    { path: '/prices', label: 'Price Feeds', icon: TrendingUp },
     { path: '/history', label: 'Activity', icon: History },
-    { path: '/profile', label: 'Profile', icon: User },
   ];
 
   return (
@@ -275,8 +277,10 @@ const App = () => {
                 <PageTransition>
                   <Routes>
                     <Route path='/' element={<Home />} />
-                    <Route path='/pool' element={<Pool />} />
+                    <Route path='/developers' element={<Developers />} />
+                    <Route path='/prices' element={<Prices />} />
                     <Route path='/history' element={<HistoryPage />} />
+                    <Route path='/pool' element={<Pool />} />
                     <Route path='/profile' element={<Profile />} />
                     <Route path='*' element={<NotFound />} />
                   </Routes>
@@ -296,8 +300,10 @@ const App = () => {
                 <PageTransition>
                   <Routes>
                     <Route path='/' element={<Home />} />
-                    <Route path='/pool' element={<Pool />} />
+                    <Route path='/developers' element={<Developers />} />
+                    <Route path='/prices' element={<Prices />} />
                     <Route path='/history' element={<HistoryPage />} />
+                    <Route path='/pool' element={<Pool />} />
                     <Route path='/profile' element={<Profile />} />
                     <Route path='*' element={<NotFound />} />
                   </Routes>

@@ -44,7 +44,7 @@ const flowEvmTestnet: Chain = {
 
 // Use getDefaultConfig as recommended by RainbowKit v2
 export const config = getDefaultConfig({
-  appName: 'Pumpkin Spice Latte',
+  appName: 'Flare Public Goods',
   projectId: 'c4f79cc821944d9680842e34466bfbd9', // Public demo project ID
   chains: [flareTestnet, katanaMainnet, flowEvmTestnet],
   transports: {

@@ -9,80 +9,73 @@ All colors MUST be HSL.
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 220 20% 15%;
+    --foreground: 0 0% 9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 15%;
+    --card-foreground: 0 0% 9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 15%;
+    --popover-foreground: 0 0% 9%;
 
-    --primary: 0 84% 60%; /* Bright red */
-    --primary-foreground: 0 0% 100%;
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 98%;
 
     --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 25%;
+    --secondary-foreground: 0 0% 9%;
 
     --muted: 0 0% 96%;
-    --muted-foreground: 220 15% 50%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 0 84% 60%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 0 72% 51%;
+    --accent-foreground: 0 0% 98%;
 
-    --success: 142 70% 45%;
-    --success-foreground: 0 0% 100%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
 
-    --warning: 32 95% 60%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 98%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
 
     --border: 0 0% 90%;
-    --input: 0 0% 95%;
-    --ring: 0 84% 60%; /* Bright red ring */
+    --input: 0 0% 90%;
+    --ring: 0 72% 51%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
     /* Task Management Specific Colors */
-    --priority-high: 0 84% 60%;
-    --priority-medium: 32 95% 60%;
-    --priority-low: 142 70% 45%;
+    --priority-high: 0 72% 51%;
+    --priority-medium: 38 92% 50%;
+    --priority-low: 142 76% 36%;
 
     /* Gradients */
     --gradient-primary: linear-gradient(
       135deg,
-      hsl(0 84% 60%),
-      hsl(0 90% 70%)
-    ); /* Bright red gradient */
+      hsl(0 72% 51%),
+      hsl(0 80% 60%)
+    );
     --gradient-subtle: linear-gradient(
       180deg,
       hsl(0 0% 100%),
-      hsl(0 0% 96%)
+      hsl(0 0% 98%)
     );
 
     /* Shadows */
-    --shadow-card: 0 2px 8px hsl(245 20% 85% / 0.3);
-    --shadow-elevated: 0 8px 32px hsl(245 20% 75% / 0.2);
+    --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.08);
+    --shadow-elevated: 0 8px 32px hsl(0 0% 0% / 0.12);
 
     /* Animations */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
+    --sidebar-foreground: 0 0% 9%;
+    --sidebar-primary: 0 72% 51%;
     --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 9%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 0 72% 51%;
   }
 
   .dark {
@@ -135,73 +128,16 @@ All colors MUST be HSL.
 }
 
 
-@keyframes pumpkin-bounce {
-  0%,
-  20%,
-  50%,
-  80%,
-  100% {
-    transform: translateY(0) translateX(0);
+/* Simple fade-in for content loading */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
   }
-  10% {
-    transform: translateY(-20px) translateX(-10px);
-  }
-  30% {
-    transform: translateY(-15px) translateX(10px);
-  }
-  40% {
-    transform: translateY(-20px) translateX(-5px);
-  }
-  60% {
-    transform: translateY(-10px) translateX(5px);
-  }
-  70% {
-    transform: translateY(-15px) translateX(-8px);
-  }
-  90% {
-    transform: translateY(-5px) translateX(8px);
-  }
-}
-
-@keyframes pumpkin-glow {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 20px rgba(220, 38, 38, 0.3));
-  }
-  50% {
-    filter: drop-shadow(0 0 30px rgba(220, 38, 38, 0.6));
-  }
-}
-
-@keyframes loading-dots {
-  0%,
-  80%,
-  100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1);
+  to {
     opacity: 1;
   }
 }
 
-.pumpkin-bounce {
-  animation: pumpkin-bounce 2s infinite, pumpkin-glow 3s infinite;
-}
-
-.loading-dot {
-  animation: loading-dots 1.4s infinite ease-in-out both;
-}
-
-.loading-dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.loading-dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-.loading-dot:nth-child(3) {
-  animation-delay: 0s;
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
 }

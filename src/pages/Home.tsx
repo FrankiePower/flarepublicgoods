@@ -11,6 +11,7 @@ import {
   flarePublicGoodsAddress,
   flarePublicGoodsAbi,
   CONTRACTS,
+  SUPPORTED_TOKENS,
 } from '../contracts/FlarePublicGoods';
 import { usdcAbi, usdcAddress } from '../contracts/USDC';
 import { formatUnits, isAddress, parseUnits } from 'viem';
@@ -30,6 +31,7 @@ import {
   scaleIn,
 } from '../lib/animations';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
+import PriceFeedDashboard from '../components/PriceFeedDashboard';
 
 const PSLHome = () => {
   const { isConnected, chain, address } = useAccount();
@@ -88,11 +90,11 @@ const PSLHome = () => {
     CONTRACTS[targetChainId as keyof typeof CONTRACTS]?.flarePublicGoods ??
     flarePublicGoodsAddress;
 
-  // Prefer on-chain ASSET to avoid mismatches
+  // Prefer on-chain FXRP to avoid mismatches
   const { data: assetOnChain } = useReadContract({
     address: contractAddress,
     abi: flarePublicGoodsAbi,
-    functionName: 'ASSET',
+    functionName: 'FXRP',
     chainId: targetChainId,
     query: {
       enabled: Boolean(contractAddress),
@@ -117,7 +119,7 @@ const PSLHome = () => {
     useReadContract({
       address: contractAddress,
       abi: flarePublicGoodsAbi,
-      functionName: 'balanceOf',
+      functionName: 'depositBalances',
       chainId: targetChainId,
       args: [address as `0x${string}`],
       query: {
@@ -127,14 +129,14 @@ const PSLHome = () => {
     });
 
   const userPSLBalance = userBalanceData
-    ? parseFloat(formatUnits(userBalanceData as bigint, 6))
+    ? parseFloat(formatUnits(userBalanceData as bigint, 18))
     : 0;
 
-  // Total assets (from contract) and probability (live from contract)
+  // Total deposits
   const { data: totalAssetsBn, refetch: refetchTotalAssets } = useReadContract({
     address: contractAddress,
     abi: flarePublicGoodsAbi,
-    functionName: 'totalAssets',
+    functionName: 'totalDeposits',
     chainId: targetChainId,
     query: {
       refetchInterval: 10000,
@@ -142,34 +144,26 @@ const PSLHome = () => {
     },
   } as any);
 
-  const { data: winProbWad, refetch: refetchWinProb } = useReadContract({
+  const { data: verifiedDevsData } = useReadContract({
     address: contractAddress,
     abi: flarePublicGoodsAbi,
-    functionName: 'currentWinProbability',
+    functionName: 'getVerifiedDeveloperCount',
     chainId: targetChainId,
     query: {
-      refetchInterval: 5000,
+      refetchInterval: 30000,
       enabled: Boolean(contractAddress),
     },
   } as any);
 
-  const nextDrawProbability = useMemo(() => {
-    try {
-      // winProbWad is 1e18-based probability. Convert to percentage with two decimals.
-      const wad = (winProbWad as bigint) ?? 0n;
-      // Multiply by 100 to get percent, then divide by 1e16 to keep two decimals as integer
-      const pctHundredths = Number((wad * 10000n) / 1000000000000000000n) / 100; // two decimals
-      return pctHundredths.toFixed(1);
-    } catch {
-      return '0.00';
-    }
-  }, [winProbWad]);
+  const verifiedDevelopers = useMemo(() => {
+    return Number(verifiedDevsData ?? 0n);
+  }, [verifiedDevsData]);
 
-  // Formatted display for total assets (USDC, 6 decimals)
+  // Formatted display for total deposits (FXRP, 18 decimals)
   const totalAssetsDisplay = useMemo(() => {
     try {
       const v = (totalAssetsBn as bigint) ?? 0n;
-      const num = parseFloat(formatUnits(v, 6));
+      const num = parseFloat(formatUnits(v, 18));
       return num.toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -226,7 +220,7 @@ const PSLHome = () => {
   const parsedAmount: bigint = useMemo(() => {
     if (!amount || Number(amount) <= 0) return 0n;
     try {
-      return parseUnits(amount, 6);
+      return parseUnits(amount, 18);
     } catch {
       return 0n;
     }
@@ -234,7 +228,7 @@ const PSLHome = () => {
 
   const walletUSDCDisplay = useMemo(() => {
     try {
-      return parseFloat(formatUnits(walletBalance as bigint, 6));
+      return parseFloat(formatUnits(walletBalance as bigint, 18));
     } catch {
       return 0;
     }
@@ -372,55 +366,32 @@ const PSLHome = () => {
     query: { enabled: Boolean(awardHash), refetchInterval: 1000 },
   } as any);
 
-  // Watch for PrizeAwarded events
+  // Watch for FundsAllocated events
   useWatchContractEvent({
     address: contractAddress,
     abi: flarePublicGoodsAbi,
-    eventName: 'PrizeAwarded',
+    eventName: 'FundsAllocated',
     onLogs: (logs) => {
-      console.log('🎉 PrizeAwarded event received:', logs);
+      console.log('🎉 FundsAllocated event received:', logs);
       if (logs.length > 0) {
         const log = logs[logs.length - 1];
-        if (log.args.winner && log.args.amount) {
+        if (log.args.developer && log.args.amount) {
           setAwardOutcome('success');
           setAwardResult({
-            winner: log.args.winner,
+            winner: log.args.developer,
             amount: log.args.amount,
           });
           toast({
             title: '💚 Funding Allocated!',
             description: `${formatUnits(
               log.args.amount,
-              6
-            )} USDC allocated to ${log.args.winner.slice(
+              18
+            )} FXRP allocated to developer ${log.args.developer.slice(
               0,
               6
-            )}...${log.args.winner.slice(-4)}!`,
+            )}...${log.args.developer.slice(-4)}!`,
           });
         }
-      }
-    },
-    enabled: Boolean(contractAddress) && Boolean(awardHash),
-  });
-
-  // Watch for PrizeNotAwarded events
-  useWatchContractEvent({
-    address: contractAddress,
-    abi: flarePublicGoodsAbi,
-    eventName: 'PrizeNotAwarded',
-    onLogs: (logs) => {
-      console.log('😅 PrizeNotAwarded event received:', logs);
-      if (logs.length > 0) {
-        const log = logs[logs.length - 1];
-        setAwardOutcome('no-prize');
-        setAwardResult({
-          caller: log.args.caller,
-        });
-        toast({
-          title: '⏳ Not this time',
-          description:
-            'Not enough yield generated for allocation. Try again soon!',
-        });
       }
     },
     enabled: Boolean(contractAddress) && Boolean(awardHash),
@@ -575,7 +546,7 @@ const PSLHome = () => {
 
       toast({
         title: 'Deposit Successful',
-        description: 'Your USDC has been deposited.',
+        description: 'Your FXRP has been deposited.',
       });
 
       // Wait a moment to show the completed state, then dismiss modal
@@ -593,8 +564,6 @@ const PSLHome = () => {
         if (address) {
           // Refetch user's PSL balance
           refetchUserBalance();
-          // Refetch win probability
-          refetchWinProb();
           // Refetch total assets
           refetchTotalAssets();
         }
@@ -605,7 +574,6 @@ const PSLHome = () => {
     depositHash,
     refetchAllowance,
     refetchUserBalance,
-    refetchWinProb,
     refetchTotalAssets,
     toast,
     address,
@@ -623,7 +591,7 @@ const PSLHome = () => {
 
       toast({
         title: 'Withdrawal Successful',
-        description: 'Your USDC has been withdrawn.',
+        description: 'Your FXRP has been withdrawn.',
       });
 
       // Wait a moment to show the completed state, then dismiss modal
@@ -638,8 +606,6 @@ const PSLHome = () => {
         if (address) {
           // Refetch user's PSL balance
           refetchUserBalance();
-          // Refetch win probability
-          refetchWinProb();
           // Refetch total assets
           refetchTotalAssets();
         }
@@ -649,7 +615,6 @@ const PSLHome = () => {
     isWithdrawConfirmed,
     withdrawHash,
     refetchUserBalance,
-    refetchWinProb,
     refetchTotalAssets,
     toast,
     address,
@@ -839,245 +804,181 @@ const PSLHome = () => {
   const isTryLuckBusy = isAwarding || isConfirmingAward;
 
   return (
-    <div className={`${isMobile ? 'h-full' : 'h-full'} flex flex-col`}>
-      {/* Main Content */}
-      <div
-        className={`flex-1 p-4 space-y-6 ${isMobile ? '' : 'overflow-y-auto'}`}
-      >
+    <div className='min-h-screen bg-background p-4 md:p-8'>
+      <div className='max-w-6xl mx-auto space-y-6'>
         {/* Network Status */}
         {isConnected && !isSupportedNetwork && (
-          <div className='p-4 rounded-lg border bg-amber-50 border-amber-200 text-amber-800'>
+          <div className='p-4 rounded-lg border border-warning/50 bg-warning/10 text-warning'>
             <div className='flex items-center gap-3'>
-              <AlertCircle className='h-5 w-5 text-amber-600' />
-              <div>
-                <p className='font-medium'>Network not supported</p>
-              </div>
+              <AlertCircle className='h-5 w-5' />
+              <p className='font-medium'>Network not supported</p>
             </div>
           </div>
         )}
 
-        {/* Main Content - Big Number Layout */}
-        <div
-          className={`space-y-6 ${
-            isMobile ? '' : 'grid grid-cols-2 gap-2 max-w-4xl mx-auto'
-          }`}
-        >
-          {/* Total Deposit Number */}
-          <div className='text-left'>
-            <Card className='border-0 shadow-none bg-transparent'>
-              <CardContent className='p-0'>
-                <div className='mb-2'>
-                  <p className='text-sm text-muted-foreground'>
-                    Your Contribution
-                  </p>
-                </div>
-                <div
-                  className={`font-black text-foreground ${
-                    isMobile ? 'text-6xl' : 'text-7xl'
-                  }`}
-                >
-                  $
-                  {userPSLBalance.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
-                <p className='text-lg text-muted-foreground'>USDC</p>
-              </CardContent>
-            </Card>
-          </div>
+        {/* Price Feeds */}
+        <PriceFeedDashboard
+          contractAddress={contractAddress as `0x${string}`}
+          contractAbi={flarePublicGoodsAbi}
+        />
 
-          {/* Yield and Countdown - Desktop: Right side, Mobile: Below Total Deposit */}
-          <div
-            className={`${
-              isMobile
-                ? 'mt-6 space-y-3'
-                : 'flex flex-col justify-center space-y-4'
-            } text-left`}
-          >
-            <div className='flex items-center gap-2'>
-              <span className='text-xl'>🌍</span>
-              <span className='text-sm text-muted-foreground'>Total funding pool</span>
-              <span className='text-lg font-bold text-green-600 ml-auto'>
-                ${totalAssetsDisplay} USDC
-              </span>
-            </div>
-
-            <div className='flex items-center gap-2'>
-              <span className='text-xl'>🎯</span>
-              <span className='text-sm text-muted-foreground'>
-                Probability of allocation
-              </span>
-              <span className='text-lg font-bold text-red-600 ml-auto'>
-                {nextDrawProbability}%
-              </span>
-            </div>
-
-            {/* Allocate funds button positioned below probability */}
-            <div className='pt-2'>
-              <Button
-                onClick={() =>
-                  tryAwardPrize({
-                    address: contractAddress,
-                    abi: flarePublicGoodsAbi,
-                    functionName: 'awardPrize',
-                  })
-                }
-                disabled={!isConnected || !isSupportedNetwork || isTryLuckBusy}
-                variant='outline'
-                className='w-full py-3 text-base border-gray-400 text-red-600 hover:bg-red-100 hover:text-red-600 rounded-lg'
-              >
-                {isTryLuckBusy ? 'Processing…' : '💚 Trigger Allocation'}
-              </Button>
-            </div>
-
-            {/* Award Result Display */}
-            {awardOutcome && (
-              <div className='mt-3 p-3 rounded-lg border'>
-                {awardOutcome === 'pending' && (
-                  <div className='text-center'>
-                    <div className='text-2xl mb-2'>🔄</div>
-                    <div className='text-sm font-medium text-blue-700'>
-                      Processing allocation...
-                    </div>
-                    <div className='text-xs text-muted-foreground mt-1'>
-                      Waiting for secure randomness verification
-                    </div>
-                  </div>
-                )}
-                {awardOutcome === 'success' &&
-                  awardResult &&
-                  awardResult.winner &&
-                  awardResult.amount && (
-                    <div className='text-center'>
-                      <div className='text-2xl mb-2'>💚</div>
-                      <div className='text-sm font-medium text-green-700'>
-                        Funding Allocated!
-                      </div>
-                      <div className='text-xs text-muted-foreground mt-1'>
-                        {formatUnits(awardResult.amount, 6)} USDC allocated to{' '}
-                        <span className='font-mono'>
-                          {awardResult.winner.slice(0, 6)}...
-                          {awardResult.winner.slice(-4)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                {awardOutcome === 'no-prize' && (
-                  <div className='text-center'>
-                    <div className='text-2xl mb-2'>⏳</div>
-                    <div className='text-sm font-medium text-red-700'>
-                      No Allocation This Round
-                    </div>
-                    <div className='text-xs text-muted-foreground mt-1'>
-                      Not enough yield generated yet. Try again soon!
-                    </div>
-                  </div>
-                )}
+        {/* Stats Grid */}
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+          {/* Your Deposit */}
+          <Card className='bg-card border-border'>
+            <CardContent className='p-6'>
+              <p className='text-sm text-muted-foreground mb-2'>Your Deposit</p>
+              <div className='text-4xl font-bold text-foreground'>
+                {userPSLBalance.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 4,
+                })}
               </div>
-            )}
-          </div>
+              <p className='text-sm text-muted-foreground mt-1'>FXRP</p>
+            </CardContent>
+          </Card>
+
+          {/* Total Deposits */}
+          <Card className='bg-card border-border'>
+            <CardContent className='p-6'>
+              <p className='text-sm text-muted-foreground mb-2'>Total Dev Funding</p>
+              <div className='text-4xl font-bold text-success'>
+                {totalAssetsDisplay}
+              </div>
+              <p className='text-sm text-muted-foreground mt-1'>FXRP</p>
+            </CardContent>
+          </Card>
+
+          {/* Verified Developers */}
+          <Card className='bg-card border-border'>
+            <CardContent className='p-6'>
+              <p className='text-sm text-muted-foreground mb-2'>Verified Developers</p>
+              <div className='text-4xl font-bold text-primary'>
+                {verifiedDevelopers}
+              </div>
+              <p className='text-sm text-muted-foreground mt-1'>Projects funded</p>
+            </CardContent>
+          </Card>
         </div>
-      </div>
 
-      {/* Action Buttons - Desktop: Below content, Mobile: At bottom */}
-      <div className={`${isMobile ? 'p-2 mb-20' : 'px-4 pt-12'}`}>
-        <div
-          className={`flex ${isMobile ? 'gap-1' : 'gap-2 max-w-4xl mx-auto'}`}
-        >
-          <div className='flex-1'>
-            <Button
-              onClick={() => handleActionClick('deposit')}
-              className='w-full h-20 text-lg font-bold bg-red-500 hover:bg-gray-900 text-white rounded-xl'
-            >
-              💸 Deposit
-            </Button>
-          </div>
+        {/* Action Buttons */}
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <Button
+            onClick={() => handleActionClick('deposit')}
+            className='h-14 text-lg font-semibold bg-primary hover:bg-primary/90'
+          >
+            Deposit FXRP
+          </Button>
 
-          <div className='flex-1'>
-            <Button
-              onClick={() => handleActionClick('withdraw')}
-              variant='outline'
-              disabled={userPSLBalance === 0}
-              className='w-full h-20 text-lg border border-red-400 text-red-500 hover:bg-red-100 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed'
-            >
-              {userPSLBalance === 0 ? (
-                <>
-                  Nothing to
-                  <br />
-                  withdraw
-                </>
-              ) : (
-                '💰 Withdraw'
+          <Button
+            onClick={() =>
+              tryAwardPrize({
+                address: contractAddress,
+                abi: flarePublicGoodsAbi,
+                functionName: 'allocateFunds',
+              })
+            }
+            disabled={!isConnected || !isSupportedNetwork || isTryLuckBusy}
+            variant='outline'
+            className='h-14 text-lg font-semibold'
+          >
+            {isTryLuckBusy ? 'Processing…' : 'Allocate Funds to Developer'}
+          </Button>
+        </div>
+
+        {/* Award Result */}
+        {awardOutcome && (
+          <Card className='bg-card border-border'>
+            <CardContent className='p-6'>
+              {awardOutcome === 'pending' && (
+                <div className='text-center'>
+                  <div className='text-2xl mb-2'>🔄</div>
+                  <div className='text-sm font-medium'>Processing allocation...</div>
+                  <div className='text-xs text-muted-foreground mt-1'>
+                    Waiting for secure randomness verification
+                  </div>
+                </div>
               )}
-            </Button>
-          </div>
-        </div>
+              {awardOutcome === 'success' && awardResult?.winner && awardResult?.amount && (
+                <div className='text-center'>
+                  <div className='text-2xl mb-2'>💚</div>
+                  <div className='text-sm font-medium text-success'>Funding Allocated!</div>
+                  <div className='text-xs text-muted-foreground mt-1'>
+                    {formatUnits(awardResult.amount, 6)} USDC allocated to{' '}
+                    <span className='font-mono'>
+                      {awardResult.winner.slice(0, 6)}...{awardResult.winner.slice(-4)}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {awardOutcome === 'no-prize' && (
+                <div className='text-center'>
+                  <div className='text-2xl mb-2'>⏳</div>
+                  <div className='text-sm font-medium'>No Allocation This Round</div>
+                  <div className='text-xs text-muted-foreground mt-1'>
+                    Not enough yield generated yet. Try again soon!
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Right Side Stack Navigation - Mobile Only */}
+      {/* Modal */}
       <AnimatePresence>
-        {isMobile && isRightStackOpen && (
+        {isRightStackOpen && (
           <motion.div
-            className='fixed inset-0 z-50 flex items-end'
+            className='fixed inset-0 z-50 flex items-center justify-center p-4'
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             {/* Backdrop */}
-            <motion.div
-              className='absolute inset-0 bg-black bg-opacity-50'
+            <div
+              className='absolute inset-0 bg-black/80'
               onClick={closeRightStack}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
             />
 
-            {/* Right Stack - 80% height with slide up animation */}
+            {/* Modal Content */}
             <motion.div
-              className='relative w-full bg-white h-[80vh] shadow-2xl rounded-t-3xl'
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{
-                type: 'spring',
-                damping: 25,
-                stiffness: 200,
-                duration: 0.3,
-              }}
+              className='relative w-full max-w-md bg-card border border-border rounded-lg shadow-elevated'
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
             >
               {/* Header */}
-              <div className='flex items-center justify-between p-6 border-b border-gray-200'>
-                <h2 className='text-xl font-bold text-gray-900'>
-                  {activeAction === 'deposit' ? '💸 Deposit' : '💰 Withdraw'}
+              <div className='flex items-center justify-between p-6 border-b border-border'>
+                <h2 className='text-xl font-bold text-foreground'>
+                  {activeAction === 'deposit' ? 'Deposit FXRP' : 'Withdraw FXRP'}
                 </h2>
                 <button
                   onClick={closeRightStack}
-                  className='p-2 hover:bg-gray-100 rounded-lg transition-colors'
+                  className='p-2 hover:bg-secondary rounded-lg transition-colors'
                 >
-                  <X className='w-5 h-5 text-gray-500' />
+                  <X className='w-5 h-5 text-muted-foreground' />
                 </button>
               </div>
 
               {/* Content */}
-              <div className='p-4 space-y-6 overflow-y-auto h-[calc(80vh-80px)]'>
+              <div className='p-6 space-y-6 max-h-[60vh] overflow-y-auto'>
                 {/* Amount Input */}
                 <div className='space-y-2'>
-                  <label className='text-sm font-medium text-gray-700'>
-                    USDC amount
+                  <label className='text-sm font-medium text-foreground'>
+                    Amount
                   </label>
                   <div className='relative'>
                     <Input
                       type='number'
-                      placeholder='0'
+                      placeholder='0.00'
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       ref={amountInputRef}
-                      className='text-4xl font-bold text-left h-16 border-0 rounded-xl focus:border focus:border-red-500 focus:border-opacity-50 focus:ring-0 pr-32 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+                      className='text-2xl font-bold h-14 bg-secondary border-border focus:border-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
                     />
                     <div className='absolute right-4 top-1/2 transform -translate-y-1/2 text-right'>
-                      <div className='text-xs text-gray-500'>Balance</div>
-                      <div className='text-sm font-medium text-gray-700'>
+                      <div className='text-xs text-muted-foreground'>Balance</div>
+                      <div className='text-sm font-medium text-foreground'>
                         {activeAction === 'deposit'
                           ? walletUSDCDisplay.toLocaleString()
                           : userPSLBalance.toLocaleString()}
@@ -1087,271 +988,60 @@ const PSLHome = () => {
                 </div>
 
                 {/* Info Cards */}
-                <div className='space-y-3'>
-                  {activeAction === 'withdraw' && (
-                    <div className='p-4 rounded-lg bg-green-50 border border-green-200'>
-                      <div className='flex items-center gap-2 mb-2'>
-                        <span className='text-blue-600'>✅</span>
-                        <span className='text-sm font-small text-green-800'>
-                          Withdrawal Info
-                        </span>
-                      </div>
-                      <p className='text-sm text-green-700'>
-                        You can withdraw your principal at any time. Only
-                        generated yield is allocated to fund public goods.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                {activeAction === 'deposit' && (
+                  <div className='p-4 rounded-lg bg-secondary border border-border'>
+                    <p className='text-sm text-muted-foreground'>
+                      Deposit FXRP to fund developers building on Flare. Allocations are made weekly using Flare's secure random number generator.
+                    </p>
+                  </div>
+                )}
 
                 {/* Action Buttons */}
-                <div className='space-y-3 pt-2'>
-                  <div>
-                    <Button
-                      onClick={handleConfirm}
-                      disabled={
-                        !isAmountValid ||
-                        (activeAction === 'withdraw' && !canWithdraw) ||
-                        isProcessing
-                      }
-                      className='w-full h-14 text-lg font-bold bg-red-500 text-white hover:bg-red-600 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed'
-                    >
-                      {isProcessing
-                        ? 'Processing...'
-                        : `Confirm ${
-                            activeAction === 'deposit'
-                              ? 'Deposit'
-                              : 'Withdrawal'
-                          }`}
-                    </Button>
+                <Button
+                  onClick={handleConfirm}
+                  disabled={
+                    !isAmountValid ||
+                    (activeAction === 'withdraw' && !canWithdraw) ||
+                    isProcessing
+                  }
+                  className='w-full h-12 text-base font-semibold'
+                >
+                  {isProcessing
+                    ? 'Processing...'
+                    : `Confirm ${activeAction === 'deposit' ? 'Deposit' : 'Withdrawal'}`}
+                </Button>
+
+                {/* Step Indicators */}
+                {activeAction === 'deposit' && depositStep !== 'idle' && (
+                  <div className='space-y-2 mt-4'>
+                    <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+                      {depositStep === 'approving' ? (
+                        <div className='w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin'></div>
+                      ) : depositStep !== 'idle' ? (
+                        <span className='text-success'>✓</span>
+                      ) : null}
+                      <span>Approve spending</span>
+                    </div>
+                    {depositStep === 'depositing' && (
+                      <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+                        <div className='w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin'></div>
+                        <span>Executing deposit...</span>
+                      </div>
+                    )}
                   </div>
+                )}
 
-                  {/* Deposit Step Indicators */}
-                  {activeAction === 'deposit' && depositStep !== 'idle' && (
-                    <div className='space-y-2 pt-2'>
-                      <div className='flex items-center gap-2 text-sm'>
-                        {depositStep === 'approving' ? (
-                          <div className='w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin'></div>
-                        ) : depositStep === 'approved' ||
-                          depositStep === 'depositing' ||
-                          depositStep === 'completed' ? (
-                          <span className='text-green-600'>✅</span>
-                        ) : (
-                          <span className='text-gray-400'>☕</span>
-                        )}
-                        <span
-                          className={
-                            depositStep === 'approved' ||
-                            depositStep === 'depositing' ||
-                            depositStep === 'completed'
-                              ? 'text-green-600'
-                              : 'text-gray-600'
-                          }
-                        >
-                          Approve spending
-                        </span>
-                      </div>
-
-                      <div className='flex items-center gap-2 text-sm'>
-                        {depositStep === 'depositing' ? (
-                          <div className='w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin'></div>
-                        ) : depositStep === 'completed' ? (
-                          <span className='text-green-600'>✅</span>
-                        ) : (
-                          <span className='text-gray-400'>☕</span>
-                        )}
-                        <span
-                          className={
-                            depositStep === 'completed'
-                              ? 'text-green-600'
-                              : 'text-gray-600'
-                          }
-                        >
-                          Execute deposit
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Withdraw Step Indicators */}
-                  {activeAction === 'withdraw' && withdrawStep !== 'idle' && (
-                    <div className='space-y-2 pt-2'>
-                      <div className='flex items-center gap-2 text-sm'>
-                        {withdrawStep === 'withdrawing' ? (
-                          <div className='w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin'></div>
-                        ) : withdrawStep === 'completed' ? (
-                          <span className='text-green-600'>✅</span>
-                        ) : (
-                          <span className='text-gray-400'>☕</span>
-                        )}
-                        <span
-                          className={
-                            withdrawStep === 'completed'
-                              ? 'text-green-600'
-                              : 'text-gray-600'
-                          }
-                        >
-                          Execute withdrawal
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {activeAction === 'withdraw' && withdrawStep === 'withdrawing' && (
+                  <div className='flex items-center gap-2 text-sm text-muted-foreground mt-4'>
+                    <div className='w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin'></div>
+                    <span>Executing withdrawal...</span>
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Desktop Modal - Center Modal for Desktop */}
-      {!isMobile && isRightStackOpen && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50'>
-          <div className='bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto'>
-            {/* Header */}
-            <div className='flex items-center justify-between p-6 border-b border-gray-200'>
-              <h2 className='text-xl font-bold text-gray-900'>
-                {activeAction === 'deposit' ? '💸 Deposit' : '💰 Withdraw'}
-              </h2>
-              <button
-                onClick={closeRightStack}
-                className='p-2 hover:bg-gray-100 rounded-lg transition-colors'
-              >
-                <X className='w-5 h-5 text-gray-500' />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className='p-6 space-y-6'>
-              {/* Amount Input */}
-              <div className='space-y-2'>
-                <label className='text-sm font-medium text-gray-700'>
-                  USDC amount
-                </label>
-                <div className='relative'>
-                  <Input
-                    type='number'
-                    placeholder='0'
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    ref={amountInputRef}
-                    className='text-4xl font-bold text-left h-16 border-0 rounded-xl focus:border focus:border-red-500 focus:border-opacity-50 focus:ring-0 pr-32 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
-                  />
-                  <div className='absolute right-4 top-1/2 transform -translate-y-1/2 text-right'>
-                    <div className='text-xs text-gray-500'>Balance</div>
-                    <div className='text-sm font-medium text-gray-700'>
-                      {activeAction === 'deposit'
-                        ? walletUSDCDisplay.toLocaleString()
-                        : userPSLBalance.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Info Cards */}
-              <div className='space-y-3'>
-                {activeAction === 'withdraw' && (
-                  <div className='p-4 rounded-lg bg-green-50 border border-green-200'>
-                    <div className='flex items-center gap-2 mb-2'>
-                      <span className='text-blue-600'>✅</span>
-                      <span className='text-sm font-medium text-green-800'>
-                        Withdrawal Info
-                      </span>
-                    </div>
-                    <p className='text-sm text-green-700'>
-                      You can withdraw your principal at any time. Only
-                      generated yield is allocated to fund public goods.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className='space-y-3 pt-4'>
-                <div>
-                  <Button
-                    onClick={handleConfirm}
-                    disabled={
-                      !isAmountValid ||
-                      (activeAction === 'withdraw' && !canWithdraw) ||
-                      isProcessing
-                    }
-                    className='w-full h-14 text-lg font-bold bg-red-500 text-white hover:bg-red-600 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed'
-                  >
-                    {isProcessing
-                      ? 'Processing...'
-                      : `Confirm ${
-                          activeAction === 'deposit' ? 'Deposit' : 'Withdrawal'
-                        }`}
-                  </Button>
-                </div>
-
-                {/* Deposit Step Indicators */}
-                {activeAction === 'deposit' && depositStep !== 'idle' && (
-                  <div className='space-y-2 pt-2'>
-                    <div className='flex items-center gap-2 text-sm'>
-                      {depositStep === 'approving' ? (
-                        <div className='w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin'></div>
-                      ) : depositStep === 'approved' ||
-                        depositStep === 'depositing' ||
-                        depositStep === 'completed' ? (
-                        <span className='text-green-600'>✅</span>
-                      ) : (
-                        <span className='text-gray-400'>☕</span>
-                      )}
-                      <span
-                        className={
-                          depositStep === 'approved' ||
-                          depositStep === 'depositing' ||
-                          depositStep === 'completed'
-                            ? 'text-green-600'
-                            : 'text-gray-600'
-                        }
-                      >
-                        Approve spending
-                      </span>
-                    </div>
-
-                    <div className='flex items-center gap-2 text-sm'>
-                      {depositStep === 'depositing' ? (
-                        <div className='w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin'></div>
-                      ) : depositStep === 'completed' ? (
-                        <span className='text-green-600'>✅</span>
-                      ) : (
-                        <span className='text-gray-400'>☕</span>
-                      )}
-                      <span className='text-gray-600'>Execute deposit</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Withdraw Step Indicators */}
-                {activeAction === 'withdraw' && withdrawStep !== 'idle' && (
-                  <div className='space-y-2 pt-2'>
-                    <div className='flex items-center gap-2 text-sm'>
-                      {withdrawStep === 'withdrawing' ? (
-                        <div className='w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin'></div>
-                      ) : withdrawStep === 'completed' ? (
-                        <span className='text-green-600'>✅</span>
-                      ) : (
-                        <span className='text-gray-400'>☕</span>
-                      )}
-                      <span
-                        className={
-                          withdrawStep === 'completed'
-                            ? 'text-green-600'
-                            : 'text-gray-600'
-                        }
-                      >
-                        Execute withdrawal
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
